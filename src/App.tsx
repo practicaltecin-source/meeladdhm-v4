@@ -213,30 +213,17 @@ export default function App() {
     // Initial sync on page load
     syncData();
 
-    // Live Real-Time Multi-Device Sync via Firestore (Instant updates across all phones/laptops on Netlify/GitHub)
+    // Live Real-Time Multi-Device Sync via Firestore (Instant updates across all phones/laptops on Netlify/Vercel)
     const unsubscribeFirestore = subscribeToFirestore((firestoreData) => {
       if (firestoreData && Array.isArray(firestoreData.teams)) {
         const normalized = normalizeDB(firestoreData);
         if (normalized) {
           const currentLocal = dbRef.current || loadDB();
-          const remoteTime = normalized.lastModified || 0;
-          const localTime = currentLocal.lastModified || 0;
-          const localTeamsCount = currentLocal?.teams?.length || 0;
-          const remoteTeamsCount = normalized?.teams?.length || 0;
-          const localResultsCount = currentLocal?.results?.length || 0;
-          const remoteResultsCount = normalized?.results?.length || 0;
-
-          const shouldUpdate = 
-            remoteTime > localTime || 
-            (localTeamsCount === 0 && remoteTeamsCount > 0);
-
-          if (shouldUpdate) {
-            const merged = mergeDatabase(currentLocal, normalized);
-            const calculated = calculatePoints(merged);
-            saveDBLocal(calculated, true);
-            dbRef.current = calculated;
-            setDb(calculated);
-          }
+          const merged = mergeDatabase(currentLocal, normalized);
+          const calculated = calculatePoints(merged);
+          saveDBLocal(calculated, true);
+          dbRef.current = calculated;
+          setDb(calculated);
         }
       }
     });

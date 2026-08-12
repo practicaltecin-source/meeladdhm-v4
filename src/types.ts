@@ -5,6 +5,7 @@ export interface Team {
   logoUrl?: string;
   color: string;
   captain: string;
+  viceCaptain?: string;
   boysCaptain?: string;
   boysCaptain2?: string;
   girlsCaptain?: string;
@@ -137,6 +138,10 @@ export interface Settings {
   noticeDurationSecs?: number;
   colorTheme?: 'natural' | 'outdoor-light' | 'outdoor-dark' | 'solar-high-contrast' | 'royal-gold' | 'emerald-luxury' | 'crimson-ruby' | 'ocean-breeze';
   googleSheetId?: string;
+  sheetWebhookUrl?: string;
+  appsScriptUrl?: string;
+  githubToken?: string;
+  githubRepo?: string;
 }
 
 export interface Database {

@@ -1,4 +1,4 @@
-import { Database, Team, Participant, Result, Settings } from './types';
+import { Database, Team, Program, Participant, Result, Settings } from './types';
 import { saveToFirestore, fetchFromFirestore } from './firebase';
 import { 
   getSavedSheetId, 
@@ -55,9 +55,48 @@ export function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
+export const DEFAULT_TEAMS: Team[] = [
+  {
+    id: 'safaa',
+    name: 'Safaa',
+    symbol: '🦁',
+    color: '#10B981',
+    points: 0,
+    captain: '',
+    viceCaptain: ''
+  },
+  {
+    id: 'marwa',
+    name: 'Marwa',
+    symbol: '🦅',
+    color: '#3B82F6',
+    points: 0,
+    captain: '',
+    viceCaptain: ''
+  },
+  {
+    id: 'uhud',
+    name: 'Uhud',
+    symbol: '🐆',
+    color: '#F59E0B',
+    points: 0,
+    captain: '',
+    viceCaptain: ''
+  },
+  {
+    id: 'badar',
+    name: 'Badar',
+    symbol: '🐺',
+    color: '#EF4444',
+    points: 0,
+    captain: '',
+    viceCaptain: ''
+  }
+];
+
 export function defaultDB(): Database {
   return {
-    teams: [],
+    teams: DEFAULT_TEAMS,
     programs: [],
     participants: [],
     results: [],
@@ -156,12 +195,24 @@ export function normalizeDB(parsed: any): Database | null {
   }
   if (!parsed.lastModified) parsed.lastModified = 0;
 
-  const teams = (parsed.teams || []).map((t: any) => ({
+  let parsedTeams = (parsed.teams || []).map((t: any) => ({
     ...t,
     name: cleanText(t.name) || t.name,
     captain: cleanText(t.captain || '')
   }));
 
+  if (parsedTeams.length === 0) {
+    parsedTeams = [...DEFAULT_TEAMS];
+  } else {
+    // Make sure all default teams exist
+    DEFAULT_TEAMS.forEach(defTeam => {
+      if (!parsedTeams.some((t: any) => t.id === defTeam.id)) {
+        parsedTeams.push({ ...defTeam });
+      }
+    });
+  }
+
+  const teams = parsedTeams;
   const validTeamIds = new Set(teams.map((t: any) => t.id));
 
   const programs = (parsed.programs || [])
@@ -369,29 +420,108 @@ export function mergeDatabase(localDb: Database, remoteDb: Database): Database {
 
   const mergedSettings = mergeSettings(localDb?.settings, remoteDb?.settings, preferRemote);
 
-  let teams = preferRemote 
-    ? (remoteDb.teams && remoteDb.teams.length > 0 ? remoteDb.teams : (localDb.teams || []))
-    : (localDb.teams && localDb.teams.length > 0 ? localDb.teams : (remoteDb.teams || []));
+  // 1. Smart Merge Teams (Union by team.id - never drop any team)
+  const teamMap = new Map<string, Team>();
+  (localDb.teams || []).forEach(t => {
+    if (t && t.id) teamMap.set(t.id, { ...t });
+  });
+  (remoteDb.teams || []).forEach(t => {
+    if (!t || !t.id) return;
+    if (!teamMap.has(t.id)) {
+      teamMap.set(t.id, { ...t });
+    } else {
+      const existing = teamMap.get(t.id)!;
+      teamMap.set(t.id, {
+        ...existing,
+        ...t,
+        name: t.name || existing.name,
+        symbol: t.symbol || existing.symbol,
+        color: t.color || existing.color,
+        captain: t.captain || existing.captain || '',
+        viceCaptain: t.viceCaptain || existing.viceCaptain || '',
+        points: Math.max(existing.points || 0, t.points || 0)
+      });
+    }
+  });
+  const mergedTeams = Array.from(teamMap.values());
 
-  let programs = preferRemote 
-    ? (remoteDb.programs && remoteDb.programs.length > 0 ? remoteDb.programs : (localDb.programs || []))
-    : (localDb.programs && localDb.programs.length > 0 ? localDb.programs : (remoteDb.programs || []));
+  // 2. Smart Merge Programs (Union by program.id - preserve created/updated programs)
+  const progMap = new Map<string, Program>();
+  (localDb.programs || []).forEach(p => {
+    if (p && p.id) progMap.set(p.id, { ...p });
+  });
+  (remoteDb.programs || []).forEach(p => {
+    if (!p || !p.id) return;
+    if (!progMap.has(p.id)) {
+      progMap.set(p.id, { ...p });
+    } else {
+      const existing = progMap.get(p.id)!;
+      // Prefer remote if newer, or combine category details
+      if (preferRemote) {
+        progMap.set(p.id, { ...existing, ...p });
+      } else {
+        progMap.set(p.id, { ...p, ...existing });
+      }
+    }
+  });
+  const mergedPrograms = Array.from(progMap.values());
 
-  let participants = preferRemote 
-    ? (remoteDb.participants && remoteDb.participants.length > 0 ? remoteDb.participants : (localDb.participants || []))
-    : (localDb.participants && localDb.participants.length > 0 ? localDb.participants : (remoteDb.participants || []));
+  // 3. Smart Merge Participants (Union by participant.id or chest number)
+  const partMap = new Map<string, Participant>();
+  (localDb.participants || []).forEach(p => {
+    if (p && (p.id || p.number)) {
+      const key = p.id || `num_${p.number}`;
+      partMap.set(key, { ...p });
+    }
+  });
+  (remoteDb.participants || []).forEach(p => {
+    if (!p || (!p.id && !p.number)) return;
+    const key = p.id || `num_${p.number}`;
+    if (!partMap.has(key)) {
+      partMap.set(key, { ...p });
+    } else {
+      const existing = partMap.get(key)!;
+      const combinedProgs = Array.from(new Set([...(existing.programIds || []), ...(p.programIds || [])]));
+      partMap.set(key, {
+        ...existing,
+        ...p,
+        programIds: combinedProgs,
+        name: p.name || existing.name,
+        teamId: p.teamId || existing.teamId,
+        cls: p.cls !== undefined ? p.cls : existing.cls,
+        division: p.division !== undefined ? p.division : existing.division
+      });
+    }
+  });
+  const mergedParticipants = Array.from(partMap.values());
 
-  let results = preferRemote 
-    ? (remoteDb.results !== undefined ? remoteDb.results : (localDb.results || []))
-    : (localDb.results !== undefined ? localDb.results : (remoteDb.results || []));
+  // 4. Smart Merge Results (Union by programId)
+  const resMap = new Map<string, Result>();
+  (localDb.results || []).forEach(r => {
+    if (r && r.programId) resMap.set(r.programId, { ...r });
+  });
+  (remoteDb.results || []).forEach(r => {
+    if (!r || !r.programId) return;
+    if (!resMap.has(r.programId)) {
+      resMap.set(r.programId, { ...r });
+    } else {
+      const existing = resMap.get(r.programId)!;
+      const existingWinnersCount = (existing.winners?.first?.length || 0) + (existing.winners?.second?.length || 0) + (existing.winners?.third?.length || 0);
+      const remoteWinnersCount = (r.winners?.first?.length || 0) + (r.winners?.second?.length || 0) + (r.winners?.third?.length || 0);
+      if (preferRemote || remoteWinnersCount >= existingWinnersCount) {
+        resMap.set(r.programId, { ...existing, ...r });
+      }
+    }
+  });
+  const mergedResults = Array.from(resMap.values());
 
   return {
-    teams,
-    programs,
-    participants,
-    results,
+    teams: mergedTeams,
+    programs: mergedPrograms,
+    participants: mergedParticipants,
+    results: mergedResults,
     settings: mergedSettings,
-    prevRanks: preferRemote ? (remoteDb.prevRanks || localDb.prevRanks || {}) : (localDb.prevRanks || remoteDb.prevRanks || {}),
+    prevRanks: { ...(localDb.prevRanks || {}), ...(remoteDb.prevRanks || {}) },
     lastModified: Math.max(localTime, remoteTime)
   };
 }
