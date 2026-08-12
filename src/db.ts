@@ -546,12 +546,13 @@ export async function fetchFromCloudSheet(): Promise<Database | null> {
 
 export const HARDCODED_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxao2v_cKiIznKc98Td20VsOKe1-niZmF9pk1qo1s3suIUTy4AcUNyFCI485XXKGR3r/exec';
 
-export async function fetchFromAppsScriptDirect(): Promise<Database | null> {
+export async function fetchFromAppsScriptDirect(customUrl?: string): Promise<Database | null> {
+  const url = customUrl || HARDCODED_APPS_SCRIPT_URL;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 2500);
 
-    const res = await fetch(HARDCODED_APPS_SCRIPT_URL, {
+    const res = await fetch(url, {
       method: 'GET',
       cache: 'no-store',
       headers: { 
@@ -566,7 +567,7 @@ export async function fetchFromAppsScriptDirect(): Promise<Database | null> {
 
     if (res.ok) {
       const text = await res.text();
-      if (text && !text.includes('Script function not found')) {
+      if (text && !text.includes('Script function not found') && !text.includes('<!DOCTYPE html>')) {
         try {
           const parsed = JSON.parse(text);
           const dbObj = parsed.db || parsed.data || parsed.result || parsed;
@@ -574,13 +575,17 @@ export async function fetchFromAppsScriptDirect(): Promise<Database | null> {
             return normalizeDB(dbObj);
           }
         } catch (e) {}
+      } else {
+        // If response is HTML or Script function not found, abort early
+        return null;
       }
     }
 
+    // Secondary attempt: POST with { action: 'read' }
     const postController = new AbortController();
-    const postTimeout = setTimeout(() => postController.abort(), 6000);
+    const postTimeout = setTimeout(() => postController.abort(), 2500);
 
-    const postRes = await fetch(HARDCODED_APPS_SCRIPT_URL, {
+    const postRes = await fetch(url, {
       method: 'POST',
       cache: 'no-store',
       headers: { 
@@ -596,7 +601,7 @@ export async function fetchFromAppsScriptDirect(): Promise<Database | null> {
 
     if (postRes.ok) {
       const postText = await postRes.text();
-      if (postText && !postText.includes('Script function not found')) {
+      if (postText && !postText.includes('Script function not found') && !postText.includes('<!DOCTYPE html>')) {
         try {
           const parsed = JSON.parse(postText);
           const dbObj = parsed.db || parsed.data || parsed.result || parsed;

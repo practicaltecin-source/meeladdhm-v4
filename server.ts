@@ -206,26 +206,30 @@ async function startServer() {
       });
     }
   });
-  app.get("/api/db", async (req, res) => {
+  app.get("/api/db", (req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
 
-    try {
-      const remoteDb = await fetchFromAppsScript();
-      if (remoteDb && remoteDb.lastModified) {
-        const remoteTime = Number(remoteDb.lastModified) || 0;
-        const localTime = dbInMemory ? (Number(dbInMemory.lastModified) || 0) : 0;
-        if (remoteTime > localTime) {
-          dbInMemory = remoteDb;
-          try {
-            fs.writeFileSync(DB_FILE_PATH, JSON.stringify(remoteDb, null, 2), "utf8");
-          } catch (e) {}
-        }
-      }
-    } catch (e) {}
-
+    // Return in-memory database immediately for lightning-fast responses
     res.json(dbInMemory || DEFAULT_SERVER_DB);
+
+    // Optionally check remote in background without delaying response
+    const customUrl = dbInMemory?.settings?.sheetWebhookUrl || dbInMemory?.settings?.appsScriptUrl;
+    if (customUrl && customUrl !== HARDCODED_APPS_SCRIPT_URL) {
+      fetchFromAppsScript().then(remoteDb => {
+        if (remoteDb && remoteDb.lastModified) {
+          const remoteTime = Number(remoteDb.lastModified) || 0;
+          const localTime = dbInMemory ? (Number(dbInMemory.lastModified) || 0) : 0;
+          if (remoteTime > localTime) {
+            dbInMemory = remoteDb;
+            try {
+              fs.writeFileSync(DB_FILE_PATH, JSON.stringify(remoteDb, null, 2), "utf8");
+            } catch (e) {}
+          }
+        }
+      }).catch(() => {});
+    }
   });
 
   app.post("/api/db", (req, res) => {
