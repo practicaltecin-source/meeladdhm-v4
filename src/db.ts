@@ -390,23 +390,23 @@ export function mergeSettings(localSettings: Settings, remoteSettings: Settings,
     ? { ...defaultDB().settings, ...localSettings, ...remoteSettings }
     : { ...defaultDB().settings, ...remoteSettings, ...localSettings };
 
+  // System status flags like isPublicSiteOffline should strictly follow the remote state if preferRemote is true or if local is default
+  const isPublicSiteOffline = preferRemote
+    ? (remoteSettings.isPublicSiteOffline !== undefined ? remoteSettings.isPublicSiteOffline : localSettings.isPublicSiteOffline)
+    : (remoteSettings.isPublicSiteOffline !== undefined ? remoteSettings.isPublicSiteOffline : localSettings.isPublicSiteOffline);
+
   return {
     ...base,
-    colorTheme: preferRemote && remoteSettings.colorTheme
-      ? remoteSettings.colorTheme
-      : (localSettings.colorTheme || remoteSettings.colorTheme || base.colorTheme),
-    isPublicSiteOffline: preferRemote && remoteSettings.isPublicSiteOffline !== undefined
-      ? remoteSettings.isPublicSiteOffline
-      : (localSettings.isPublicSiteOffline !== undefined ? localSettings.isPublicSiteOffline : base.isPublicSiteOffline),
+    isPublicSiteOffline: isPublicSiteOffline !== undefined ? isPublicSiteOffline : false,
     offlineMessage: preferRemote && remoteSettings.offlineMessage !== undefined
       ? remoteSettings.offlineMessage
-      : (localSettings.offlineMessage !== undefined ? localSettings.offlineMessage : base.offlineMessage),
+      : (localSettings.offlineMessage || remoteSettings.offlineMessage || base.offlineMessage),
     showNotice: preferRemote && remoteSettings.showNotice !== undefined
       ? remoteSettings.showNotice
-      : (localSettings.showNotice !== undefined ? localSettings.showNotice : base.showNotice),
+      : (remoteSettings.showNotice !== undefined ? remoteSettings.showNotice : localSettings.showNotice),
     isLiveCelebrationActive: preferRemote && remoteSettings.isLiveCelebrationActive !== undefined
       ? remoteSettings.isLiveCelebrationActive
-      : (localSettings.isLiveCelebrationActive !== undefined ? localSettings.isLiveCelebrationActive : base.isLiveCelebrationActive),
+      : (remoteSettings.isLiveCelebrationActive !== undefined ? remoteSettings.isLiveCelebrationActive : localSettings.isLiveCelebrationActive),
   };
 }
 
@@ -416,7 +416,8 @@ export function mergeDatabase(localDb: Database, remoteDb: Database): Database {
 
   const localTime = localDb.lastModified || 0;
   const remoteTime = remoteDb.lastModified || 0;
-  const preferRemote = remoteTime > localTime;
+  // Prefer remote if remote timestamp is newer, equal, or within clock skew range (within 10 seconds), or if local has no data
+  const preferRemote = remoteTime >= localTime - 10000 || (localDb.programs?.length === 0 && remoteDb.programs?.length > 0);
 
   const mergedSettings = mergeSettings(localDb?.settings, remoteDb?.settings, preferRemote);
 
