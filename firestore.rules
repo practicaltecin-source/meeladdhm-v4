@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // App state document for live result management
+    match /appState/{stateId} {
+      allow read, write: if true;
+    }
+  }
+}
