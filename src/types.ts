@@ -34,6 +34,7 @@ export interface Program {
   categories: ProgramCategory[];
   stageType?: 'Main Stage' | 'Offstage';
   schedule?: string;
+  categorySchedules?: Record<string, { day?: string; venue?: string; startTime?: string; endTime?: string; stageType?: string }>;
 }
 
 export interface Participant {

@@ -806,6 +806,32 @@ export default function Programs({ db, onGenerateReport }: ProgramsProps) {
                       </>
                     )}
                   </div>
+
+                  {/* Category-Wise Time Slots */}
+                  {p.categorySchedules && Object.keys(p.categorySchedules).length > 0 && (
+                    <div className="col-span-1 md:col-span-2 space-y-1.5 pt-1 border-t border-brand-line/40">
+                      <span className="text-[10px] font-extrabold text-brand-green-900 flex items-center gap-1">
+                        ⏱️ Category Time & Stage Slots:
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {Object.entries(p.categorySchedules).map(([catAge, sched]) => (
+                          <div key={catAge} className="p-1.5 bg-brand-green-50/80 rounded-lg border border-brand-green-200/60 text-[10px]">
+                            <div className="flex items-center justify-between font-bold text-brand-green-950">
+                              <span>{catAge}</span>
+                              <span className="text-brand-gold-700 font-extrabold">{sched.startTime || 'Pending'}</span>
+                            </div>
+                            {(sched.venue || sched.day) && (
+                              <div className="text-[9px] text-brand-ink-soft mt-0.5 font-medium">
+                                {sched.venue && <span>📍 {sched.venue}</span>}
+                                {sched.venue && sched.day && <span> &bull; </span>}
+                                {sched.day && <span>📅 {sched.day}</span>}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   {p.schedule && (
                     <div className="flex items-center gap-1.5 text-brand-ink-soft col-span-1 md:col-span-2 text-[9px] italic">

@@ -1109,6 +1109,25 @@ export default function Home({ db, onNavigateToResults, onUpdateDb }: HomeProps)
                             )}
                           </div>
 
+                          {/* Category-Wise Multi-Schedule Breakdown */}
+                          {p.categorySchedules && Object.keys(p.categorySchedules).length > 0 && (
+                            <div className="pt-2 border-t border-brand-line/40 space-y-1">
+                              <span className="text-[10px] font-extrabold text-brand-green-900 block">
+                                ⏱️ Category Time & Stage Slots:
+                              </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {Object.entries(p.categorySchedules).map(([catAge, sched]) => (
+                                  <div key={catAge} className="p-1.5 bg-brand-green-50/80 rounded-lg border border-brand-green-200/60 text-[10px] flex items-center justify-between">
+                                    <span className="font-extrabold text-brand-green-950">{catAge}</span>
+                                    <span className="font-semibold text-brand-green-900">
+                                      {sched.startTime ? `⏰ ${sched.startTime}` : ''} {sched.venue ? `📍 ${sched.venue}` : ''}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Warning Banner if Time Passed */}
                           {status === 'PASSED' && (
                             <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-2 text-[10px] flex items-center gap-1.5 font-medium">

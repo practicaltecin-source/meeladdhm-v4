@@ -381,6 +381,10 @@ export default function Scoreboard({ db, onUpdateDb }: ScoreboardProps) {
 
     const prog = progMap.get(r.programId);
     const isGen = prog?.categories.some(c => (c.gender as string) === 'General' || (c.age as string) === 'All' || (c.age as string) === 'General') || (r.gender as string) === 'General' || (r.age as string) === 'General' || (r.age as string) === 'All';
+    const isGroupProg = Boolean(prog?.group || isGen);
+
+    // Group & General programs award points solely to the TEAM score, NOT to individual candidate toppers!
+    if (isGroupProg) return;
 
     ['first', 'second', 'third'].forEach(pos => {
       const key = pos as 'first' | 'second' | 'third';
@@ -429,16 +433,28 @@ export default function Scoreboard({ db, onUpdateDb }: ScoreboardProps) {
     const pts = db.settings.points;
 
     catResults.forEach(r => {
+      const prog = progMap.get(r.programId);
+      const isGroupProg = Boolean(prog?.group || prog?.categories.some(c => (c.gender as string) === 'General' || (c.age as string) === 'General' || (c.age as string) === 'All') || (r.gender as string) === 'General' || (r.age as string) === 'General' || (r.age as string) === 'All');
+
       ['first', 'second', 'third'].forEach(pos => {
         const key = pos as 'first' | 'second' | 'third';
+        let winPts = pts[key];
+        if (isGroupProg) {
+          if (key === 'first') winPts = pts.generalFirst ?? pts.first;
+          else if (key === 'second') winPts = pts.generalSecond ?? pts.second;
+          else if (key === 'third') winPts = pts.generalThird ?? pts.third;
+        }
+
         (r.winners[key] || []).forEach(w => {
-          if (w.teamId) teamScores[w.teamId] = (teamScores[w.teamId] || 0) + pts[key];
+          if (w.teamId) teamScores[w.teamId] = (teamScores[w.teamId] || 0) + winPts;
           
-          const candKey = `${w.name}|${w.teamId || ''}`;
-          if (!candidateScores[candKey]) {
-            candidateScores[candKey] = { name: w.name, teamId: w.teamId, points: 0 };
+          if (!isGroupProg) {
+            const candKey = `${w.name}|${w.teamId || ''}`;
+            if (!candidateScores[candKey]) {
+              candidateScores[candKey] = { name: w.name, teamId: w.teamId, points: 0 };
+            }
+            candidateScores[candKey].points += winPts;
           }
-          candidateScores[candKey].points += pts[key];
         });
       });
 
@@ -447,11 +463,13 @@ export default function Scoreboard({ db, onUpdateDb }: ScoreboardProps) {
         (r.grades[key] || []).forEach(e => {
           if (e.teamId) teamScores[e.teamId] = (teamScores[e.teamId] || 0) + pts[key];
 
-          const candKey = `${e.name}|${e.teamId || ''}`;
-          if (!candidateScores[candKey]) {
-            candidateScores[candKey] = { name: e.name, teamId: e.teamId, points: 0 };
+          if (!isGroupProg) {
+            const candKey = `${e.name}|${e.teamId || ''}`;
+            if (!candidateScores[candKey]) {
+              candidateScores[candKey] = { name: e.name, teamId: e.teamId, points: 0 };
+            }
+            candidateScores[candKey].points += pts[key];
           }
-          candidateScores[candKey].points += pts[key];
         });
       });
     });

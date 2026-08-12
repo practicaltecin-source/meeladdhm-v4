@@ -62,7 +62,9 @@ export default function CandidateSearch({ db }: CandidateSearchProps) {
   // Helper to find program results for a candidate
   const getCandidateAchievements = (cand: Participant, programId: string) => {
     const resultsForProg = db.results.filter(r => r.programId === programId);
-    const achievements: { title: string; pts: number; type: 'winner' | 'grade' }[] = [];
+    const prog = db.programs.find(p => p.id === programId);
+    const isGroupProg = Boolean(prog?.group || prog?.categories.some(c => c.gender === 'General' || c.age === 'General' || c.age === 'All'));
+    const achievements: { title: string; pts: number; type: 'winner' | 'grade'; isGroup?: boolean }[] = [];
 
     resultsForProg.forEach(res => {
       // Check winners
@@ -70,17 +72,22 @@ export default function CandidateSearch({ db }: CandidateSearchProps) {
         const placeWinners = (res.winners as any)?.[placeKey] || [];
         const isWinner = placeWinners.some((w: any) => 
           w.name.toLowerCase() === cand.name.toLowerCase() || 
-          (w.teamId && w.teamId === cand.teamId && w.name.toLowerCase() === cand.name.toLowerCase())
+          (w.teamId && w.teamId === cand.teamId && (w.name.toLowerCase() === cand.name.toLowerCase() || isGroupProg))
         );
 
         if (isWinner) {
-          const pts = placeKey === 'first' 
-            ? (db.settings.points.first || 10) 
+          const rawPts = placeKey === 'first' 
+            ? (isGroupProg ? (db.settings.points.generalFirst || 15) : (db.settings.points.first || 10)) 
             : placeKey === 'second' 
-            ? (db.settings.points.second || 7) 
-            : (db.settings.points.third || 5);
-          const title = placeKey === 'first' ? '🥇 1st Place' : placeKey === 'second' ? '🥈 2nd Place' : '🥉 3rd Place';
-          achievements.push({ title, pts, type: 'winner' });
+            ? (isGroupProg ? (db.settings.points.generalSecond || 10) : (db.settings.points.second || 7)) 
+            : (isGroupProg ? (db.settings.points.generalThird || 7) : (db.settings.points.third || 5));
+          const pts = isGroupProg ? 0 : rawPts; // Individual candidate gets 0 personal pts for Group item (Team gets pts)
+          const title = placeKey === 'first' 
+            ? (isGroupProg ? '🥇 1st Place (👥 Group - Team Score)' : '🥇 1st Place')
+            : placeKey === 'second' 
+            ? (isGroupProg ? '🥈 2nd Place (👥 Group - Team Score)' : '🥈 2nd Place')
+            : (isGroupProg ? '🥉 3rd Place (👥 Group - Team Score)' : '🥉 3rd Place');
+          achievements.push({ title, pts, type: 'winner', isGroup: isGroupProg });
         }
       });
 
@@ -88,17 +95,23 @@ export default function CandidateSearch({ db }: CandidateSearchProps) {
       ['gradeA', 'gradeB', 'gradeC'].forEach((gradeKey) => {
         const gradeWinners = (res.grades as any)?.[gradeKey] || [];
         const isGrade = gradeWinners.some((w: any) => 
-          w.name.toLowerCase() === cand.name.toLowerCase()
+          w.name.toLowerCase() === cand.name.toLowerCase() ||
+          (w.teamId && w.teamId === cand.teamId && isGroupProg)
         );
 
         if (isGrade) {
-          const pts = gradeKey === 'gradeA' 
+          const rawPts = gradeKey === 'gradeA' 
             ? (db.settings.points.gradeA || 5) 
             : gradeKey === 'gradeB' 
             ? (db.settings.points.gradeB || 3) 
             : (db.settings.points.gradeC || 1);
-          const title = gradeKey === 'gradeA' ? '⭐ Grade A' : gradeKey === 'gradeB' ? '✨ Grade B' : '💫 Grade C';
-          achievements.push({ title, pts, type: 'grade' });
+          const pts = isGroupProg ? 0 : rawPts;
+          const title = gradeKey === 'gradeA' 
+            ? (isGroupProg ? '⭐ Grade A (👥 Group)' : '⭐ Grade A')
+            : gradeKey === 'gradeB' 
+            ? (isGroupProg ? '✨ Grade B (👥 Group)' : '✨ Grade B')
+            : (isGroupProg ? '💫 Grade C (👥 Group)' : '💫 Grade C');
+          achievements.push({ title, pts, type: 'grade', isGroup: isGroupProg });
         }
       });
     });

@@ -560,6 +560,7 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
   const [scheduleProgFilter, setScheduleProgFilter] = useState('all');
   const [scheduleStageFilter, setScheduleStageFilter] = useState('all');
   const [scheduleDayFilter, setScheduleDayFilter] = useState('all');
+  const [scheduleCatFilter, setScheduleCatFilter] = useState('all');
 
   // Program Management Search & Filtering States
   const [programSearchQuery, setProgramSearchQuery] = useState('');
@@ -831,6 +832,10 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
         if (!dayStr.includes(scheduleDayFilter.toLowerCase())) return false;
       }
     }
+    if (scheduleCatFilter !== 'all') {
+      const matchCat = p.categories.some(c => c.age === scheduleCatFilter || c.gender === scheduleCatFilter);
+      if (!matchCat) return false;
+    }
     return true;
   });
 
@@ -939,6 +944,27 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
     onUpdateDb({
       ...db,
       programs: db.programs.map(p => p.id === id ? { ...p, [field]: value } : p)
+    });
+  };
+
+  const handleUpdateCategorySchedule = (progId: string, categoryAge: string, field: string, val: string) => {
+    onUpdateDb({
+      ...db,
+      programs: db.programs.map(p => {
+        if (p.id !== progId) return p;
+        const existing = p.categorySchedules || {};
+        const catObj = existing[categoryAge] || {};
+        return {
+          ...p,
+          categorySchedules: {
+            ...existing,
+            [categoryAge]: {
+              ...catObj,
+              [field]: val
+            }
+          }
+        };
+      })
     });
   };
 
@@ -4335,7 +4361,7 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {/* Dropdown 1: Program Select */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-brand-ink-soft uppercase tracking-wider block">
@@ -4358,7 +4384,7 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
                 {/* Dropdown 2: Stage / Venue Select */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-brand-ink-soft uppercase tracking-wider block">
-                    2. Stage (Stage 1-5 / Main / Offstage)
+                    2. Stage / Venue
                   </label>
                   <select
                     value={scheduleStageFilter}
@@ -4379,10 +4405,30 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
                   </select>
                 </div>
 
-                {/* Dropdown 3: Time / Date Select */}
+                {/* Dropdown 3: Category Filter */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-brand-ink-soft uppercase tracking-wider block">
-                    3. Time & Date
+                    3. Age Category
+                  </label>
+                  <select
+                    value={scheduleCatFilter}
+                    onChange={(e) => setScheduleCatFilter(e.target.value)}
+                    className="w-full px-3 py-2 bg-brand-panel border border-brand-line rounded-xl text-xs font-medium text-brand-ink focus:outline-none focus:border-brand-gold-500 shadow-xs cursor-pointer"
+                  >
+                    <option value="all">🌐 All Age Groups</option>
+                    <option value="Kids">👶 Kids</option>
+                    <option value="Sub Junior">👦 Sub Junior</option>
+                    <option value="Junior">🧑 Junior</option>
+                    <option value="Senior">👨 Senior</option>
+                    <option value="Super Senior">🎓 Super Senior</option>
+                    <option value="General">👥 General / All</option>
+                  </select>
+                </div>
+
+                {/* Dropdown 4: Time / Date Select */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-brand-ink-soft uppercase tracking-wider block">
+                    4. Time & Date
                   </label>
                   <select
                     value={scheduleDayFilter}
@@ -4658,6 +4704,69 @@ export default function AdminDashboard({ db, onUpdateDb, onAddResultDirectly, on
                           </select>
                         </div>
                       </div>
+
+                      {/* Category-Wise Schedule Multi-Slot Control */}
+                      {p.categories && p.categories.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-brand-line/50 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-brand-green-950 flex items-center gap-1.5">
+                              <span>⏱️ Category-Specific Schedule & Stage Slots</span>
+                            </span>
+                            <span className="text-[10px] text-brand-ink-soft">
+                              Set custom time slots & stages for Super Senior, Senior, Junior, Sub Junior, Kids
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                            {p.categories.map((cat, cIdx) => {
+                              const catKey = cat.age;
+                              const catSched = p.categorySchedules?.[catKey] || {};
+
+                              return (
+                                <div key={cIdx} className="p-2.5 bg-brand-bg/80 rounded-xl border border-brand-line/60 space-y-1.5 text-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-extrabold text-brand-green-950 text-xs">
+                                      {cat.age} ({cat.gender})
+                                    </span>
+                                    <span className="text-[9px] font-semibold text-brand-gold-700 bg-brand-gold-100 px-1.5 py-0.5 rounded">
+                                      {catSched.startTime || 'Time Pending'}
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-1 text-[11px]">
+                                    <input
+                                      type="text"
+                                      placeholder="Stage / Venue (e.g. Stage 1)"
+                                      value={catSched.venue || ''}
+                                      disabled={isLocked}
+                                      onChange={(e) => handleUpdateCategorySchedule(p.id, catKey, 'venue', e.target.value)}
+                                      className="w-full px-2 py-1 bg-white border border-brand-line rounded-lg text-[11px] focus:outline-none disabled:opacity-60"
+                                    />
+                                    <div className="flex gap-1">
+                                      <input
+                                        type="text"
+                                        placeholder="Time (e.g. 09:30 AM)"
+                                        value={catSched.startTime || ''}
+                                        disabled={isLocked}
+                                        onChange={(e) => handleUpdateCategorySchedule(p.id, catKey, 'startTime', e.target.value)}
+                                        className="w-1/2 px-2 py-1 bg-white border border-brand-line rounded-lg text-[11px] focus:outline-none disabled:opacity-60"
+                                      />
+                                      <input
+                                        type="text"
+                                        placeholder="Date (e.g. 24/07)"
+                                        value={catSched.day || ''}
+                                        disabled={isLocked}
+                                        onChange={(e) => handleUpdateCategorySchedule(p.id, catKey, 'day', e.target.value)}
+                                        className="w-1/2 px-2 py-1 bg-white border border-brand-line rounded-lg text-[11px] focus:outline-none disabled:opacity-60"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Candidate List & Stage Call Print Section */}
                       {(() => {
